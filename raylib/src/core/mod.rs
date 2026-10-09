@@ -2,29 +2,52 @@
 mod macros;
 
 pub mod audio;
+pub mod automation;
+pub mod callbacks;
 pub mod camera;
 pub mod collision;
-pub mod color;
+pub mod color {
+    #[allow(unused_imports)]
+    pub use crate::ffi::Color;
+}
+pub mod data;
 pub mod drawing;
+pub mod error;
 pub mod file;
+
 pub mod input;
 pub mod logging;
 pub mod math;
 pub mod misc;
 pub mod models;
 pub mod shaders;
-pub mod storage;
 pub mod text;
 pub mod texture;
 pub mod vr;
 pub mod window;
 
+use raylib_sys::TraceLogLevel;
+
 use crate::ffi;
 use std::ffi::CString;
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicBool, Ordering};
 
-static IS_INITIALIZED: AtomicBool = AtomicBool::new(false);
+// shamelessly stolen from imgui
+#[macro_export]
+macro_rules! rstr {
+    ($e:tt) => ({
+        #[allow(unused_unsafe)]
+        unsafe {
+          std::ffi::CStr::from_bytes_with_nul_unchecked(concat!($e, "\0").as_bytes())
+        }
+    });
+    ($e:tt, $($arg:tt)*) => ({
+        #[allow(unused_unsafe)]
+        unsafe {
+          std::ffi::CString::new(format!($e, $($arg)*)).unwrap()
+        }
+    })
+}
 
 /// This token is used to ensure certain functions are only running on the same
 /// thread raylib was initialized from. This is useful for architectures like macos
@@ -44,11 +67,12 @@ pub struct RaylibHandle(()); // inner field is private, preventing manual constr
 
 impl Drop for RaylibHandle {
     fn drop(&mut self) {
-        if IS_INITIALIZED.load(Ordering::Relaxed) {
-            unsafe {
+        unsafe {
+            if ffi::IsWindowReady() {
                 ffi::CloseWindow();
+                // NOTE(IOI_XD): If imgui is enabled, we don't call the destructor here because we're using a context that Rust expects to free, and the only other thing in that function is the free'ing of FontTexture...an action which causes a segfault.
+                // It then gets successfully replaced if rlImGuiReloadFonts is called, so we'll take it.
             }
-            IS_INITIALIZED.store(false, Ordering::Relaxed);
         }
     }
 }
@@ -56,18 +80,19 @@ impl Drop for RaylibHandle {
 /// A builder that allows more customization of the game window shown to the user before the `RaylibHandle` is created.
 #[derive(Debug, Default)]
 pub struct RaylibBuilder {
-    show_logo: bool,
     fullscreen_mode: bool,
     window_resizable: bool,
     window_undecorated: bool,
     window_transparent: bool,
     msaa_4x_hint: bool,
     vsync_hint: bool,
+    log_level: TraceLogLevel,
     width: i32,
     height: i32,
     title: String,
 }
-
+#[inline]
+#[must_use]
 /// Creates a `RaylibBuilder` for choosing window options before initialization.
 pub fn init() -> RaylibBuilder {
     RaylibBuilder {
@@ -79,18 +104,17 @@ pub fn init() -> RaylibBuilder {
 }
 
 impl RaylibBuilder {
-    /// Shows the raylib logo at startup.
-    pub fn with_logo(&mut self) -> &mut Self {
-        self.show_logo = true;
-        self
-    }
-
     /// Sets the window to be fullscreen.
     pub fn fullscreen(&mut self) -> &mut Self {
         self.fullscreen_mode = true;
         self
     }
 
+    /// Set the builder's log level.
+    pub fn log_level(&mut self, level: TraceLogLevel) -> &mut Self {
+        self.log_level = level;
+        self
+    }
     /// Sets the window to be resizable.
     pub fn resizable(&mut self) -> &mut Self {
         self.window_resizable = true;
@@ -152,11 +176,8 @@ impl RaylibBuilder {
     ///
     /// Attempting to initialize Raylib more than once will result in a panic.
     pub fn build(&self) -> (RaylibHandle, RaylibThread) {
-        use crate::consts::ConfigFlag::*;
+        use crate::consts::ConfigFlags::*;
         let mut flags = 0u32;
-        if self.show_logo {
-            flags |= FLAG_SHOW_LOGO as u32;
-        }
         if self.fullscreen_mode {
             flags |= FLAG_FULLSCREEN_MODE as u32;
         }
@@ -177,9 +198,15 @@ impl RaylibBuilder {
         }
 
         unsafe {
-            ffi::SetConfigFlags(flags as u8);
+            ffi::SetConfigFlags(flags as u32);
         }
+
+        unsafe {
+            ffi::SetTraceLogLevel(self.log_level as i32);
+        }
+
         let rl = init_window(self.width, self.height, &self.title);
+
         (rl, RaylibThread(PhantomData))
     }
 }
@@ -190,14 +217,17 @@ impl RaylibBuilder {
 ///
 /// Attempting to initialize Raylib more than once will result in a panic.
 fn init_window(width: i32, height: i32, title: &str) -> RaylibHandle {
-    if IS_INITIALIZED.load(Ordering::Relaxed) {
-        panic!("Attempted to initialize raylib-rs more than once");
+    if unsafe { ffi::IsWindowReady() } {
+        panic!("Attempted to initialize raylib-rs more than once!");
     } else {
         unsafe {
             let c_title = CString::new(title).unwrap();
             ffi::InitWindow(width, height, c_title.as_ptr());
         }
-        IS_INITIALIZED.store(true, Ordering::Relaxed);
+        if !unsafe { ffi::IsWindowReady() } {
+            panic!("Attempting to create window failed!");
+        }
+
         RaylibHandle(())
     }
 }

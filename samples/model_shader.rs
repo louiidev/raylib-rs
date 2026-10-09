@@ -15,13 +15,10 @@ fn main() {
         45.0,                         // FOV
     );
 
-    rl.set_camera_mode(&camera, CameraMode::CAMERA_FREE);
     rl.set_target_fps(60);
 
     // Load shader
-    let shader = rl
-        .load_shader(&thread, None, Some("static/model_shader/grayscale.fs"))
-        .unwrap();
+    let shader = rl.load_shader(&thread, None, Some("static/model_shader/grayscale.fs"));
 
     // Load model
     let mut model = rl
@@ -44,30 +41,30 @@ fn main() {
     material.shader = *shader.as_ref();
 
     // Assign loaded texture to material albedo map
-    let mut maps = material.maps_mut();
-    maps[MaterialMapType::MAP_ALBEDO as usize].texture = texture;
+    let maps = material.maps_mut();
+    maps[MaterialMapIndex::MATERIAL_MAP_ALBEDO as usize].texture = texture;
 
     let model_position = Vector3::new(0.0, 0.0, 0.0);
 
     while !rl.window_should_close() {
-        rl.update_camera(&mut camera);
+        camera.update_camera(CameraMode::CAMERA_FREE);
+        //rl.update_camera(&mut camera, CameraMode::CAMERA_FREE);
 
-        let mut drawing = rl.begin_drawing(&thread);
-        drawing.clear_background(Color::WHITE);
-        {
-            let mut mode_3d = drawing.begin_mode_3D(camera);
+        rl.draw(&thread, |mut drawing| {
+            drawing.clear_background(Color::WHITE);
+            drawing.draw_mode3D(camera, |mut mode_3d| {
+                mode_3d.draw_model(&model, model_position, 0.2, Color::WHITE);
+                mode_3d.draw_grid(10, 1.0);
+            });
 
-            mode_3d.draw_model(&model, model_position, 0.2, Color::WHITE);
-            mode_3d.draw_grid(10, 1.0);
-        }
-
-        drawing.draw_text(
-            "(c) Watermill 3D model by Alberto Cano",
-            w - 210,
-            h - 20,
-            10,
-            Color::GRAY,
-        );
-        drawing.draw_fps(10, 10)
+            drawing.draw_text(
+                "(c) Watermill 3D model by Alberto Cano",
+                w - 210,
+                h - 20,
+                10,
+                Color::GRAY,
+            );
+            drawing.draw_fps(10, 10)
+        });
     }
 }

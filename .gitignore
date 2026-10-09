@@ -1,4 +1,4 @@
-/target
+target
 **/*.rs.bk
 Cargo.lock
 /.vscode
@@ -7,3 +7,5 @@ raylib-test/test_out/*
 !raylib-test/test_out/.gitkeep
 raylib-test/storage.data
 samples/savegame
+showcase/*.png
+showcase/*.raw

@@ -18,7 +18,6 @@ Permission is granted to anyone to use this software for any purpose, including 
 //!
 //! Test crate for raylib functions requires nightly
 //! ```
-#![feature(optin_builtin_traits)]
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::tests::test_runner)]
 #![allow(dead_code)]
@@ -31,13 +30,47 @@ extern crate test;
 
 #[cfg(test)]
 #[macro_use]
-mod tests;
+pub mod tests;
 
+#[cfg(not(feature = "SUPPORT_CUSTOM_FRAME_CONTROL"))]
+#[cfg(not(feature = "automation_event_test"))]
 mod audio;
+#[cfg(not(target_os = "windows"))]
+#[cfg(not(feature = "SUPPORT_CUSTOM_FRAME_CONTROL"))]
+#[cfg(not(feature = "automation_event_test"))]
+mod callbacks;
+#[cfg(not(feature = "SUPPORT_CUSTOM_FRAME_CONTROL"))]
+#[cfg(not(feature = "automation_event_test"))]
+mod data;
+#[cfg(not(feature = "SUPPORT_CUSTOM_FRAME_CONTROL"))]
+#[cfg(not(feature = "automation_event_test"))]
 mod drawing;
+#[cfg(not(feature = "SUPPORT_CUSTOM_FRAME_CONTROL"))]
+#[cfg(not(feature = "automation_event_test"))]
+mod image;
+#[cfg(feature = "SUPPORT_CUSTOM_FRAME_CONTROL")]
+mod manual;
+#[cfg(not(feature = "SUPPORT_CUSTOM_FRAME_CONTROL"))]
+#[cfg(not(feature = "automation_event_test"))]
 mod misc;
+#[cfg(not(feature = "SUPPORT_CUSTOM_FRAME_CONTROL"))]
+#[cfg(not(feature = "automation_event_test"))]
 mod models;
-mod storage;
+#[cfg(not(feature = "SUPPORT_CUSTOM_FRAME_CONTROL"))]
+#[cfg(not(feature = "automation_event_test"))]
+mod random;
+#[cfg(not(feature = "SUPPORT_CUSTOM_FRAME_CONTROL"))]
+#[cfg(not(feature = "automation_event_test"))]
 mod text;
+#[cfg(not(feature = "SUPPORT_CUSTOM_FRAME_CONTROL"))]
+#[cfg(not(feature = "automation_event_test"))]
 mod texture;
+#[cfg(not(feature = "SUPPORT_CUSTOM_FRAME_CONTROL"))]
+#[cfg(not(feature = "automation_event_test"))]
 mod window;
+
+#[cfg(not(feature = "SUPPORT_CUSTOM_FRAME_CONTROL"))]
+#[cfg(not(feature = "automation_event_test"))]
+mod logging;
+
+mod automation;

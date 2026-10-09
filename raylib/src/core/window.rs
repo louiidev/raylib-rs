@@ -1,23 +1,357 @@
 //! Window manipulation functions
 use crate::core::math::{Matrix, Ray, Vector2};
 use crate::core::{RaylibHandle, RaylibThread};
-use crate::ffi;
+use crate::{MintVec2, MintVec3, ffi};
 use std::ffi::{CStr, CString, IntoStringError, NulError};
+use std::os::raw::c_char;
 
-// MonitorInfo grabs the sizes (virtual and physical) of your monitor
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+/// MonitorInfo grabs the sizes (virtual and physical) of your monitor
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MonitorInfo {
-    width: i32,
-    height: i32,
-    physical_width: i32,
-    physical_height: i32,
-    name: String,
+    pub width: i32,
+    pub height: i32,
+    pub physical_width: i32,
+    pub physical_height: i32,
+    pub name: String,
+    pub position: Vector2,
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct WindowState(i32);
+
+impl WindowState {
+    /// Whether to try enabling V-Sync on GPU
+    pub const fn vsync_hint(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_VSYNC_HINT as i32) != 0
+    }
+    /// Set to try enabling V-Sync on GPU
+    pub const fn set_vsync_hint(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_VSYNC_HINT as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_VSYNC_HINT as i32);
+        }
+        self
+    }
+
+    /// Whether to run program in fullscreen
+    pub const fn fullscreen_mode(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_FULLSCREEN_MODE as i32) != 0
+    }
+    /// Set to run program in fullscreen
+    pub const fn set_fullscreen_mode(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_FULLSCREEN_MODE as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_FULLSCREEN_MODE as i32);
+        }
+        self
+    }
+
+    /// Whether to allow resizable window
+    pub const fn window_resizable(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_WINDOW_RESIZABLE as i32) != 0
+    }
+    /// Set to allow resizable window
+    pub const fn set_window_resizable(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_WINDOW_RESIZABLE as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_WINDOW_RESIZABLE as i32);
+        }
+        self
+    }
+
+    /// Whether to disable window decoration (frame and buttons)
+    pub const fn window_undecorated(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_WINDOW_UNDECORATED as i32) != 0
+    }
+    /// Set to disable window decoration (frame and buttons)
+    pub const fn set_window_undecorated(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_WINDOW_UNDECORATED as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_WINDOW_UNDECORATED as i32);
+        }
+        self
+    }
+
+    /// Whether to hide window
+    pub const fn window_hidden(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_WINDOW_HIDDEN as i32) != 0
+    }
+    /// Set to hide window
+    pub const fn set_window_hidden(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_WINDOW_HIDDEN as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_WINDOW_HIDDEN as i32);
+        }
+        self
+    }
+
+    /// Whether to minimize window (iconify)
+    pub const fn window_minimized(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_WINDOW_MINIMIZED as i32) != 0
+    }
+    /// Set to minimize window (iconify)
+    pub const fn set_window_minimized(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_WINDOW_MINIMIZED as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_WINDOW_MINIMIZED as i32);
+        }
+        self
+    }
+
+    /// Whether to maximize window (expanded to monitor)
+    pub const fn window_maximized(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_WINDOW_MAXIMIZED as i32) != 0
+    }
+    /// Set to maximize window (expanded to monitor)
+    pub const fn set_window_maximized(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_WINDOW_MAXIMIZED as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_WINDOW_MAXIMIZED as i32);
+        }
+        self
+    }
+
+    /// Whether to window non focused
+    pub const fn window_unfocused(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_WINDOW_UNFOCUSED as i32) != 0
+    }
+    /// Set to window non focused
+    pub const fn set_window_unfocused(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_WINDOW_UNFOCUSED as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_WINDOW_UNFOCUSED as i32);
+        }
+        self
+    }
+
+    /// Whether to window always on top
+    pub const fn window_topmost(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_WINDOW_TOPMOST as i32) != 0
+    }
+    /// Set to window always on top
+    pub const fn set_window_topmost(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_WINDOW_TOPMOST as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_WINDOW_TOPMOST as i32);
+        }
+        self
+    }
+
+    /// Whether to allow windows running while minimized
+    pub const fn window_always_run(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_WINDOW_ALWAYS_RUN as i32) != 0
+    }
+    /// Set to allow windows running while minimized
+    pub const fn set_window_always_run(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_WINDOW_ALWAYS_RUN as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_WINDOW_ALWAYS_RUN as i32);
+        }
+        self
+    }
+
+    /// Whether to allow transparent framebuffer
+    pub const fn window_transparent(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_WINDOW_TRANSPARENT as i32) != 0
+    }
+    /// Set to allow transparent framebuffer
+    pub const fn set_window_transparent(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_WINDOW_TRANSPARENT as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_WINDOW_TRANSPARENT as i32);
+        }
+        self
+    }
+
+    /// Whether to support HighDPI
+    pub const fn window_highdpi(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_WINDOW_HIGHDPI as i32) != 0
+    }
+    /// Set to support HighDPI
+    pub const fn set_window_highdpi(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_WINDOW_HIGHDPI as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_WINDOW_HIGHDPI as i32);
+        }
+        self
+    }
+
+    /// Whether to try enabling MSAA 4X
+    pub const fn msaa(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_MSAA_4X_HINT as i32) != 0
+    }
+    /// Set to try enabling MSAA 4X
+    pub const fn set_msaa(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_MSAA_4X_HINT as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_MSAA_4X_HINT as i32);
+        }
+        self
+    }
+
+    /// Whether to try enabling interlaced video format (for V3D)
+    pub const fn interlaced_hint(&self) -> bool {
+        self.0 & (ffi::ConfigFlags::FLAG_INTERLACED_HINT as i32) != 0
+    }
+    /// Set to try enabling interlaced video format (for V3D)
+    pub const fn set_interlaced_hint(mut self, enabled: bool) -> Self {
+        if enabled {
+            // set the bit
+            self.0 |= ffi::ConfigFlags::FLAG_INTERLACED_HINT as i32;
+        } else {
+            // enable the bit
+            self.0 &= !(ffi::ConfigFlags::FLAG_INTERLACED_HINT as i32);
+        }
+        self
+    }
 }
 
 /// Get number of connected monitors
+#[inline]
+#[must_use]
 pub fn get_monitor_count() -> i32 {
     unsafe { ffi::GetMonitorCount() }
 }
+
+/// Get current connected monitor
+#[inline]
+#[must_use]
+pub fn get_current_monitor() -> i32 {
+    unsafe { ffi::GetCurrentMonitor() }
+}
+
+/// Get current connected monitor
+#[inline]
+#[must_use]
+pub fn get_current_monitor_index() -> i32 {
+    unsafe { ffi::GetCurrentMonitor() }
+}
+
+/// Get specified monitor refresh rate
+#[inline]
+#[must_use]
+pub fn get_monitor_refresh_rate(monitor: i32) -> i32 {
+    debug_assert!(
+        monitor < get_monitor_count() && monitor >= 0,
+        "monitor index out of range"
+    );
+
+    unsafe { ffi::GetMonitorRefreshRate(monitor) }
+}
+
+/// Get width of monitor
+/// Only checks that monitor index is in range in debug mode
+#[inline]
+#[must_use]
+pub fn get_monitor_width(monitor: i32) -> i32 {
+    let len = get_monitor_count();
+    debug_assert!(monitor < len && monitor >= 0, "monitor index out of range");
+
+    unsafe { ffi::GetMonitorWidth(monitor) }
+}
+
+/// Get height of monitor
+/// Only checks that monitor index is in range in debug mode
+#[inline]
+#[must_use]
+pub fn get_monitor_height(monitor: i32) -> i32 {
+    let len = get_monitor_count();
+    debug_assert!(monitor < len && monitor >= 0, "monitor index out of range");
+
+    unsafe { ffi::GetMonitorHeight(monitor) }
+}
+
+/// Get physical width of monitor
+/// Only checks that monitor index is in range in debug mode
+#[inline]
+#[must_use]
+pub fn get_monitor_physical_width(monitor: i32) -> i32 {
+    let len = get_monitor_count();
+    debug_assert!(monitor < len && monitor >= 0, "monitor index out of range");
+
+    unsafe { ffi::GetMonitorPhysicalWidth(monitor) }
+}
+
+/// Get physical height of monitor
+/// Only checks that monitor index is in range in debug mode
+#[inline]
+#[must_use]
+pub fn get_monitor_physical_height(monitor: i32) -> i32 {
+    let len = get_monitor_count();
+    debug_assert!(monitor < len && monitor >= 0, "monitor index out of range");
+
+    unsafe { ffi::GetMonitorPhysicalHeight(monitor) }
+}
+
+/// Get name of monitor
+/// Only checks that monitor index is in range in debug mode
+#[inline]
+#[must_use]
+pub fn get_monitor_name(monitor: i32) -> Result<String, IntoStringError> {
+    let len = get_monitor_count();
+    debug_assert!(monitor < len && monitor >= 0, "monitor index out of range");
+
+    Ok(unsafe {
+        let c = CString::from_raw(ffi::GetMonitorName(monitor) as *mut c_char);
+        c.into_string()?
+    })
+}
+
+/// Get position of monitor
+/// Only checks that monitor index is in range in debug mode
+#[inline]
+#[must_use]
+pub fn get_monitor_position(monitor: i32) -> Vector2 {
+    let len = get_monitor_count();
+    debug_assert!(monitor < len && monitor >= 0, "monitor index out of range");
+
+    unsafe { ffi::GetMonitorPosition(monitor).into() }
+}
+
 /// Gets the attributes of the monitor as well as the name
 /// fails if monitor name is not a utf8 string
 /// ```rust
@@ -31,27 +365,18 @@ pub fn get_monitor_count() -> i32 {
 ///     Ok(())
 /// }
 /// ```
-pub fn get_monitor_info(index: i32) -> Result<MonitorInfo, IntoStringError> {
+#[must_use]
+pub fn get_monitor_info(monitor: i32) -> Result<MonitorInfo, IntoStringError> {
     let len = get_monitor_count();
-    debug_assert!(index < len && index >= 0, "monitor index out of range");
-    let (width, height, physical_width, physical_height) = unsafe {
-        (
-            ffi::GetMonitorWidth(index),
-            ffi::GetMonitorHeight(index),
-            ffi::GetMonitorPhysicalWidth(index),
-            ffi::GetMonitorPhysicalHeight(index),
-        )
-    };
-    let name = unsafe {
-        let c = CString::from_raw(ffi::GetMonitorName(index) as *mut i8);
-        c.into_string()?
-    };
+    debug_assert!(monitor < len && monitor >= 0, "monitor index out of range");
+
     Ok(MonitorInfo {
-        width,
-        height,
-        physical_height,
-        physical_width,
-        name,
+        width: get_monitor_width(monitor),
+        height: get_monitor_height(monitor),
+        physical_height: get_monitor_physical_height(monitor),
+        physical_width: get_monitor_physical_width(monitor),
+        name: get_monitor_name(monitor)?,
+        position: get_monitor_position(monitor),
     })
 }
 
@@ -59,25 +384,46 @@ pub fn get_monitor_info(index: i32) -> Result<MonitorInfo, IntoStringError> {
 /// ```rust
 /// use raylib::prelude::*;
 /// fn main() {
-///     let c = Camera::orthographic(
-///            Vector3::zero(),
-///            Vector3::new(0.0, 0.0, 1.0),
-///            Vector3::up(),
+///     let c = Camera::perspective(
+///            Vector3::new(0.0, 0.0, 0.0),
+///            Vector3::new(0.0, 0.0, -1.0),
+///            Vector3::new(0.0, 1.0, 0.0),
 ///            90.0,
 ///        );
 ///        let m = get_camera_matrix(&c);
+///        assert_eq!(m, Matrix::identity());
 /// }
 /// ```
+#[must_use]
 pub fn get_camera_matrix(camera: impl Into<ffi::Camera>) -> Matrix {
     unsafe { ffi::GetCameraMatrix(camera.into()).into() }
 }
 
+/// Returns camera 2D transform matrix (view matrix)
+/// ```rust
+/// use raylib::prelude::*;
+/// fn main() {
+///     let c = Camera2D::default();
+///     let m = get_camera_matrix2D(&c);
+///     let mut check = Matrix::zero();
+///     check.m10 = 1.0;
+///     check.m15 = 1.0;
+///     assert_eq!(m, check);
+/// }
+/// ```
+#[allow(non_snake_case)]
+#[must_use]
+pub fn get_camera_matrix2D(camera: impl Into<ffi::Camera2D>) -> Matrix {
+    unsafe { ffi::GetCameraMatrix2D(camera.into()).into() }
+}
+
 impl RaylibHandle {
+    #[must_use]
     /// Get clipboard text content
     pub fn get_clipboard_text(&self) -> Result<String, std::str::Utf8Error> {
         unsafe {
             let c = ffi::GetClipboardText();
-            let c = CStr::from_ptr(c as *mut i8);
+            let c = CStr::from_ptr(c as *mut c_char);
             c.to_str().map(|s| s.to_owned())
         }
     }
@@ -94,28 +440,85 @@ impl RaylibHandle {
 
 // Screen-space-related functions
 impl RaylibHandle {
-    /// Returns a ray trace from mouse position
-    pub fn get_mouse_ray(
+    /// Get a ray trace from screen position (i.e mouse)
+    #[inline]
+    #[must_use]
+    pub fn get_screen_to_world_ray(
         &self,
-        mouse_position: impl Into<ffi::Vector2>,
+        mouse_position: impl Into<MintVec2>,
         camera: impl Into<ffi::Camera>,
     ) -> Ray {
-        unsafe { ffi::GetMouseRay(mouse_position.into(), camera.into()).into() }
+        unsafe { ffi::GetScreenToWorldRay(mouse_position.into(), camera.into()).into() }
+    }
+
+    /// Get a ray trace from screen position (i.e mouse) in a viewport
+    #[inline]
+    #[must_use]
+    pub fn get_screen_to_world_ray_ex(
+        &self,
+        mouse_position: impl Into<MintVec2>,
+        camera: impl Into<ffi::Camera>,
+        width: i32,
+        height: i32,
+    ) -> Ray {
+        unsafe {
+            ffi::GetScreenToWorldRayEx(mouse_position.into(), camera.into(), width, height).into()
+        }
     }
 
     /// Returns the screen space position for a 3d world space position
+    #[inline]
+    #[must_use]
     pub fn get_world_to_screen(
         &self,
-        position: impl Into<ffi::Vector3>,
+        position: impl Into<MintVec3>,
         camera: impl Into<ffi::Camera>,
     ) -> Vector2 {
         unsafe { ffi::GetWorldToScreen(position.into(), camera.into()).into() }
+    }
+
+    /// Returns the screen space position for a 2d camera world space position
+    #[allow(non_snake_case)]
+    #[inline]
+    #[must_use]
+    pub fn get_world_to_screen2D(
+        &self,
+        position: impl Into<MintVec2>,
+        camera: impl Into<ffi::Camera2D>,
+    ) -> Vector2 {
+        unsafe { ffi::GetWorldToScreen2D(position.into(), camera.into()).into() }
+    }
+
+    /// Returns size position for a 3d world space position
+    #[inline]
+    #[must_use]
+    pub fn get_world_to_screen_ex(
+        &self,
+        position: impl Into<MintVec3>,
+        camera: impl Into<ffi::Camera>,
+        width: i32,
+        height: i32,
+    ) -> Vector2 {
+        unsafe { ffi::GetWorldToScreenEx(position.into(), camera.into(), width, height).into() }
+    }
+
+    /// Returns the world space position for a 2d camera screen space position
+    #[allow(non_snake_case)]
+    #[inline]
+    #[must_use]
+    pub fn get_screen_to_world2D(
+        &self,
+        position: impl Into<MintVec2>,
+        camera: impl Into<ffi::Camera2D>,
+    ) -> Vector2 {
+        unsafe { ffi::GetScreenToWorld2D(position.into(), camera.into()).into() }
     }
 }
 
 // Timing related functions
 impl RaylibHandle {
     /// Set target FPS (maximum)
+    #[inline]
     pub fn set_target_fps(&mut self, fps: u32) {
         unsafe {
             ffi::SetTargetFPS(fps as i32);
@@ -123,16 +526,22 @@ impl RaylibHandle {
     }
 
     /// Returns current FPS
+    #[inline]
+    #[must_use]
     pub fn get_fps(&self) -> u32 {
         unsafe { ffi::GetFPS() as u32 }
     }
 
     /// Returns time in seconds for last frame drawn
+    #[inline]
+    #[must_use]
     pub fn get_frame_time(&self) -> f32 {
         unsafe { ffi::GetFrameTime() }
     }
 
     /// Returns elapsed time in seconds since InitWindow()
+    #[inline]
+    #[must_use]
     pub fn get_time(&self) -> f64 {
         unsafe { ffi::GetTime() }
     }
@@ -141,33 +550,98 @@ impl RaylibHandle {
 // Window handling functions
 impl RaylibHandle {
     /// Checks if `KEY_ESCAPE` or Close icon was pressed.
+    /// Do not call on web unless you are compiling with asyncify.
     #[inline]
+    #[must_use]
     pub fn window_should_close(&self) -> bool {
         unsafe { ffi::WindowShouldClose() }
     }
 
     /// Checks if window has been initialized successfully.
     #[inline]
+    #[must_use]
     pub fn is_window_ready(&self) -> bool {
         unsafe { ffi::IsWindowReady() }
     }
 
+    /// Set window state: maximized, if resizable
+    #[inline]
+    pub fn maximize_window(&mut self) {
+        unsafe { ffi::MaximizeWindow() }
+    }
+
+    /// Set window state: minimized, if resizable
+    #[inline]
+    pub fn minimize_window(&mut self) {
+        unsafe { ffi::MinimizeWindow() }
+    }
+
+    /// Set window state: not minimized/maximized
+    #[inline]
+    pub fn restore_window(&mut self) {
+        unsafe { ffi::RestoreWindow() }
+    }
+
+    /// Check if window is currently maximized
+    #[inline]
+    #[must_use]
+    pub fn is_window_maximized(&self) -> bool {
+        unsafe { ffi::IsWindowMaximized() }
+    }
+
     /// Checks if window has been minimized (or lost focus).
     #[inline]
+    #[must_use]
     pub fn is_window_minimized(&self) -> bool {
         unsafe { ffi::IsWindowMinimized() }
     }
 
     /// Checks if window has been resized.
     #[inline]
+    #[must_use]
     pub fn is_window_resized(&self) -> bool {
         unsafe { ffi::IsWindowResized() }
     }
 
     /// Checks if window has been hidden.
     #[inline]
+    #[must_use]
     pub fn is_window_hidden(&self) -> bool {
-        unsafe { ffi::IsWindowResized() }
+        unsafe { ffi::IsWindowHidden() }
+    }
+
+    /// Returns whether or not window is in fullscreen mode
+    #[inline]
+    #[must_use]
+    pub fn is_window_fullscreen(&self) -> bool {
+        unsafe { ffi::IsWindowFullscreen() }
+    }
+
+    /// Check if window is currently focused (only PLATFORM_DESKTOP)
+    #[inline]
+    #[must_use]
+    pub fn is_window_focused(&self) -> bool {
+        unsafe { ffi::IsWindowFocused() }
+    }
+
+    /// Check if window is currently focused (only PLATFORM_DESKTOP)
+    #[inline]
+    #[must_use]
+    pub fn get_window_scale_dpi(&self) -> Vector2 {
+        unsafe { ffi::GetWindowScaleDPI().into() }
+    }
+
+    /// Check if cursor is on the current screen.
+    #[inline]
+    #[must_use]
+    pub fn is_cursor_on_screen(&self) -> bool {
+        unsafe { ffi::IsCursorOnScreen() }
+    }
+
+    /// Set mouse cursor
+    #[inline]
+    pub fn set_mouse_cursor(&self, cursor: crate::consts::MouseCursor) {
+        unsafe { ffi::SetMouseCursor(cursor as i32) }
     }
 
     /// Toggles fullscreen mode (only on desktop platforms).
@@ -178,20 +652,68 @@ impl RaylibHandle {
         }
     }
 
-    /// Show the window.
+    /// Set window configuration state using flags
     #[inline]
-    pub fn unhide_window(&mut self) {
-        unsafe {
-            ffi::UnhideWindow();
-        }
+    pub fn set_window_state(&mut self, state: WindowState) {
+        unsafe { ffi::SetWindowState(state.0 as u32) }
     }
 
-    /// Hide the window.
+    /// Clear window configuration state flags
     #[inline]
-    pub fn hide_window(&mut self) {
+    pub fn clear_window_state(&mut self, state: WindowState) {
+        unsafe { ffi::ClearWindowState(state.0 as u32) }
+    }
+
+    /// Get the window config state
+    #[must_use]
+    pub fn get_window_state(&self) -> WindowState {
+        let state = WindowState::default();
         unsafe {
-            ffi::HideWindow();
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_VSYNC_HINT as u32) {
+                state.set_vsync_hint(true);
+            }
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_FULLSCREEN_MODE as u32) {
+                state.set_fullscreen_mode(true);
+            }
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_WINDOW_RESIZABLE as u32) {
+                state.set_window_resizable(true);
+            }
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_WINDOW_UNDECORATED as u32) {
+                state.set_window_undecorated(true);
+            }
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_WINDOW_HIDDEN as u32) {
+                state.set_window_hidden(true);
+            }
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_WINDOW_MINIMIZED as u32) {
+                state.set_window_minimized(true);
+            }
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_WINDOW_MAXIMIZED as u32) {
+                state.set_window_maximized(true);
+            }
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_WINDOW_UNFOCUSED as u32) {
+                state.set_window_unfocused(true);
+            }
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_WINDOW_TOPMOST as u32) {
+                state.set_window_topmost(true);
+            }
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_WINDOW_ALWAYS_RUN as u32) {
+                state.set_window_always_run(true);
+            }
+
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_WINDOW_TRANSPARENT as u32) {
+                state.set_window_transparent(true);
+            }
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_WINDOW_HIGHDPI as u32) {
+                state.set_window_highdpi(true);
+            }
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_MSAA_4X_HINT as u32) {
+                state.set_msaa(true);
+            }
+            if ffi::IsWindowState(ffi::ConfigFlags::FLAG_INTERLACED_HINT as u32) {
+                state.set_interlaced_hint(true);
+            }
         }
+        state
     }
 
     /// Sets icon for window (only on desktop platforms).
@@ -200,6 +722,13 @@ impl RaylibHandle {
         unsafe {
             ffi::SetWindowIcon(*image.as_ref());
         }
+    }
+
+    /// Set icon for window (multiple images, RGBA 32bit)
+    #[inline]
+    pub fn set_window_icons(&mut self, images: &mut [raylib_sys::Image]) {
+        use std::convert::TryInto;
+        unsafe { ffi::SetWindowIcons(images.as_mut_ptr(), images.len().try_into().unwrap()) }
     }
 
     /// Sets title for window (only on desktop platforms).
@@ -222,6 +751,8 @@ impl RaylibHandle {
     /// Sets monitor for the current window (fullscreen mode).
     #[inline]
     pub fn set_window_monitor(&mut self, monitor: i32) {
+        let len = get_monitor_count();
+        debug_assert!(monitor < len && monitor >= 0, "monitor index out of range");
         unsafe {
             ffi::SetWindowMonitor(monitor);
         }
@@ -235,6 +766,14 @@ impl RaylibHandle {
         }
     }
 
+    /// Sets maximum window dimensions (for `FLAG_WINDOW_RESIZABLE`).
+    #[inline]
+    pub fn set_window_max_size(&mut self, width: i32, height: i32) {
+        unsafe {
+            ffi::SetWindowMaxSize(width, height);
+        }
+    }
+
     /// Sets window dimensions.
     #[inline]
     pub fn set_window_size(&mut self, width: i32, height: i32) {
@@ -243,16 +782,57 @@ impl RaylibHandle {
         }
     }
 
-    /// Gets current screen width.
+    /// Set window opacity, value opacity is between 0.0 and 1.0
     #[inline]
+    pub fn set_window_opacity(&mut self, opacity: f32) {
+        unsafe { ffi::SetWindowOpacity(opacity) }
+    }
+
+    /// Get current render width which is equal to screen width * dpi scale
+    #[inline]
+    #[must_use]
+    pub fn get_render_width(&self) -> i32 {
+        unsafe { ffi::GetRenderWidth() }
+    }
+
+    /// Get current render width which is equal to screen height * dpi scale
+    #[inline]
+    #[must_use]
+    pub fn get_render_height(&self) -> i32 {
+        unsafe { ffi::GetRenderHeight() }
+    }
+
+    /// Get current screen width.
+    #[inline]
+    #[must_use]
     pub fn get_screen_width(&self) -> i32 {
         unsafe { ffi::GetScreenWidth() }
     }
 
     /// Gets current screen height.
     #[inline]
+    #[must_use]
     pub fn get_screen_height(&self) -> i32 {
         unsafe { ffi::GetScreenHeight() }
+    }
+
+    /// Get window position
+    #[inline]
+    #[must_use]
+    pub fn get_window_position(&self) -> Vector2 {
+        unsafe { ffi::GetWindowPosition().into() }
+    }
+
+    /// Toggle window state: borderless windowed (only on desktop platforms).
+    #[inline]
+    pub fn toggle_borderless_windowed(&self) {
+        unsafe { ffi::ToggleBorderlessWindowed() }
+    }
+
+    /// Focus the window (only on desktop platforms)
+    #[inline]
+    pub fn set_window_focused(&self) {
+        unsafe { ffi::SetWindowFocused() }
     }
 }
 
@@ -276,6 +856,7 @@ impl RaylibHandle {
 
     /// Checks if mouse cursor is not visible.
     #[inline]
+    #[must_use]
     pub fn is_cursor_hidden(&self) -> bool {
         unsafe { ffi::IsCursorHidden() }
     }
@@ -296,9 +877,33 @@ impl RaylibHandle {
         }
     }
 
-    /// Get the raw window Handle
+    /// Get native window handle
     #[inline]
+    #[must_use]
     pub unsafe fn get_window_handle(&mut self) -> *mut ::std::os::raw::c_void {
-        ffi::GetWindowHandle()
+        unsafe { ffi::GetWindowHandle() }
+    }
+}
+
+// Advanced "frame control" functions.
+// NOTE: Those functions are intended for advanced users that want full control over the frame processing
+// By default EndDrawing() does this job: draws everything + SwapScreenBuffer() + manage frame timing + PollInputEvents()
+// To avoid that behaviour and control frame processes manually, enable in config.h: SUPPORT_CUSTOM_FRAME_CONTROL
+#[cfg(feature = "SUPPORT_CUSTOM_FRAME_CONTROL")]
+impl RaylibHandle {
+    /// Swap back buffer with front buffer (screen drawing)
+    /// This function, by default, is already done when the handle is dropped.
+    pub fn swap_screen_buffer(&self) {
+        unsafe { ffi::SwapScreenBuffer() }
+    }
+
+    /// Register all input events
+    pub fn poll_input_events(&self) {
+        unsafe { ffi::PollInputEvents() }
+    }
+
+    /// Wait for some time (halt program execution)
+    pub fn wait_time(&self, seconds: f64) {
+        unsafe { ffi::WaitTime(seconds) }
     }
 }
